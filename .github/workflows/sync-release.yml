@@ -1,0 +1,50 @@
+name: Sync release to latest tag
+
+on:
+  schedule:
+    - cron: "47 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout workflow branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: workflow
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream and fetch tags
+        run: |
+          git remote add upstream https://github.com/alam00000/bentopdf.git
+          git fetch upstream --prune
+          git fetch upstream --tags --force
+
+      - name: Find latest upstream tag
+        id: latest_tag
+        run: |
+          TAG=$(git tag --sort=-creatordate | head -n 1)
+
+          if [ -z "$TAG" ]; then
+            echo "No tags found in upstream."
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Latest tag: $TAG"
+
+      - name: Force-update release to latest tag
+        run: |
+          TAG="${{ steps.latest_tag.outputs.tag }}"
+          COMMIT=$(git rev-list -n 1 "$TAG")
+          git push origin "${COMMIT}:refs/heads/release" --force
